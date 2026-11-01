@@ -128,24 +128,23 @@ object GeckoPluginHost {
               function noop() {}
               return {
                 configGet: function(pid, token, k) {
-                  if (!auth(pid, token)) return null;
+                  if (!auth(pid, token) || !Object.prototype.hasOwnProperty.call(seed, pid)) return null;
                   var bag = seed[pid];
                   if (!bag || !Object.prototype.hasOwnProperty.call(bag, k)) return null;
                   return JSON.stringify(bag[k]);
                 },
                 configSet: function(pid, token, k, json) {
-                  if (!auth(pid, token)) return;
-                  if (!seed[pid]) seed[pid] = {};
+                  if (!auth(pid, token) || !Object.prototype.hasOwnProperty.call(seed, pid)) return;
                   try { seed[pid][k] = JSON.parse(json); } catch (e) { seed[pid][k] = json; }
                   send('${CONFIG_PROMPT}', { pid: pid, token: token, k: k, v: json });
                 },
                 configRemove: function(pid, token, k) {
-                  if (!auth(pid, token)) return;
-                  if (seed[pid]) delete seed[pid][k];
+                  if (!auth(pid, token) || !Object.prototype.hasOwnProperty.call(seed, pid)) return;
+                  delete seed[pid][k];
                   send('${CONFIG_PROMPT}', { pid: pid, token: token, k: k, v: null });
                 },
                 configAll: function(pid, token) {
-                  return auth(pid, token) ? JSON.stringify(seed[pid] || {}) : '{}';
+                  return auth(pid, token) && Object.prototype.hasOwnProperty.call(seed, pid) ? JSON.stringify(seed[pid]) : '{}';
                 },
                 action: function(pid, token, method, args) {
                   if (!auth(pid, token)) return;
