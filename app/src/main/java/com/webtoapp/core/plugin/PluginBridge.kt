@@ -60,6 +60,16 @@ class PluginBridge(
 
     fun revokeAll() = tokens.clear()
 
+    /** Validate a Gecko prompt against the same per-plugin capability model as WebView. */
+    fun isAuthorized(
+        pluginId: String,
+        token: String,
+        permission: PluginPermission? = null
+    ): Boolean {
+        val plugin = authorize(pluginId, token) ?: return false
+        return permission == null || plugin.hasPermission(permission)
+    }
+
     private fun authorize(pluginId: String, token: String): Plugin? {
         if (tokens[token] != pluginId) return null
         return host.pluginFor(pluginId)
