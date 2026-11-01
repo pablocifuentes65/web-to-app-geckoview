@@ -113,7 +113,10 @@ object GeckoPluginHost {
 
     private fun bridgeStub(configSeedJson: String, pluginTokens: Map<String, String>): String {
         val literal = jsString(configSeedJson)
-        val tokensLiteral = jsString(JSONObject(pluginTokens as Map<*, *>).toString())
+        val tokensJson = pluginTokens.entries.joinToString(prefix = "{", postfix = "}") { (key, value) ->
+            "${jsonQuote(key)}:${jsonQuote(value)}"
+        }
+        val tokensLiteral = jsString(tokensJson)
         return """
             try { delete window.__hcj; delete window.__hcjBridge; } catch (e) {}
             window.__hcjBridge = (function() {
@@ -238,6 +241,27 @@ object GeckoPluginHost {
         val pid = obj.optString("pid")
         if (pid.isBlank()) return
         PluginHostState.updateBadge(pid, obj.optString("text"), obj.optString("color"))
+    }
+
+    /** Serialize a string as a JSON string without Android's org.json runtime. */
+    private fun jsonQuote(value: String): String = buildString {
+        append('"')
+        for (ch in value) {
+            when (ch) {
+                '\\\\' -> append("\\\\\\\\")
+                '"' -> append("\\\\\"")
+                '\\b' -> append("\\\\b")
+                '\\u000C' -> append("\\\\f")
+                '\\n' -> append("\\\\n")
+                '\\r' -> append("\\\\r")
+                '\\t' -> append("\\\\t")
+                else -> if (ch.code < 0x20) {
+                    append("\\\\u")
+                    append(ch.code.toString(16).padStart(4, '0'))
+                } else append(ch)
+            }
+        }
+        append('"')
     }
 
     private fun jsString(value: String): String = buildString {
