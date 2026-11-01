@@ -19,6 +19,7 @@ object GeckoPluginHost {
     fun configSeed(store: PluginConfigStore, plugins: List<PluginSession.Resolved>): String {
         val root = JSONObject()
         for (resolved in runnable(plugins)) {
+            if (!resolved.plugin.hasPermission(PluginPermission.STORAGE)) continue
             val raw = store.all(resolved.plugin.id)
             val bag = try {
                 JSONObject(raw)
@@ -34,7 +35,8 @@ object GeckoPluginHost {
         plugins: List<PluginSession.Resolved>,
         url: String,
         appLang: String,
-        configSeedJson: String
+        configSeedJson: String,
+        pluginTokens: Map<String, String> = emptyMap()
     ): String {
         val matching = runnable(plugins).filter { it.plugin.matchesUrl(url) }
         if (matching.isEmpty()) return ""
@@ -43,7 +45,7 @@ object GeckoPluginHost {
         val parts = ArrayList<String>()
         parts += CLEANUP_JS
         if (hcj.isNotEmpty()) {
-            parts += bridgeStub(configSeedJson)
+            parts += bridgeStub(configSeedJson, pluginTokens)
             parts += PluginInjection.BOOTSTRAP_JS
             parts += "window.__wtaAppLang=${jsString(appLang)};"
             for (resolved in hcj) {
@@ -85,14 +87,17 @@ object GeckoPluginHost {
         val payload = value.orEmpty()
         when (message) {
             CONFIG_PROMPT -> {
+                if (!isPromptAuthorized(payload, session, PluginPermission.STORAGE)) return true
                 applyConfig(store, payload)
                 return true
             }
             BADGE_PROMPT -> {
+                if (!isPromptAuthorized(payload, session, PluginPermission.BADGE)) return true
                 applyBadge(payload)
                 return true
             }
             PANEL_PROMPT -> {
+                if (!isPromptAuthorized(payload, session)) return true
                 val json = parsePanel(payload) ?: return true
                 session?.deliverPanelMessageToPanel(json)
                 return true
@@ -101,16 +106,20 @@ object GeckoPluginHost {
         }
     }
 
-    private fun bridgeStub(configSeedJson: String): String {
+    private fun bridgeStub(configSeedJson: String, pluginTokens: Map<String, String>): String {
         val literal = jsString(configSeedJson)
+        val tokensLiteral = jsString(JSONObject(pluginTokens as Map<*, *>).toString())
         return """
             try { delete window.__hcj; delete window.__hcjBridge; } catch (e) {}
             window.__hcjBridge = (function() {
               var seed = {};
+              var tokens = {};
               try { seed = JSON.parse($literal) || {}; } catch (e) {}
+              try { tokens = JSON.parse($tokensLiteral) || {}; } catch (e) {}
               function send(channel, body) {
                 try { prompt(channel, JSON.stringify(body)); } catch (e) {}
               }
+              function auth(pid, token) { return !!pid && !!token && tokens[pid] === token; }
               function noop() {}
               return {
                 configGet: function(pid, token, k) {
@@ -119,23 +128,26 @@ object GeckoPluginHost {
                   return JSON.stringify(bag[k]);
                 },
                 configSet: function(pid, token, k, json) {
+                  if (!auth(pid, token)) return;
                   if (!seed[pid]) seed[pid] = {};
                   try { seed[pid][k] = JSON.parse(json); } catch (e) { seed[pid][k] = json; }
-                  send('${CONFIG_PROMPT}', { pid: pid, k: k, v: json });
+                  send('${CONFIG_PROMPT}', { pid: pid, token: token, k: k, v: json });
                 },
                 configRemove: function(pid, token, k) {
+                  if (!auth(pid, token)) return;
                   if (seed[pid]) delete seed[pid][k];
-                  send('${CONFIG_PROMPT}', { pid: pid, k: k, v: null });
+                  send('${CONFIG_PROMPT}', { pid: pid, token: token, k: k, v: null });
                 },
                 configAll: function(pid, token) { return JSON.stringify(seed[pid] || {}); },
                 fetch: function() {},
                 notify: noop,
                 badge: function(pid, token, text, color) {
-                  send('${BADGE_PROMPT}', { pid: pid, text: text == null ? '' : String(text), color: color || '' });
+                  if (!auth(pid, token)) return;
+                  send('${BADGE_PROMPT}', { pid: pid, token: token, text: text == null ? '' : String(text), color: color || '' });
                 },
                 panelOpen: noop,
                 panelClose: noop,
-                panelSend: function(pid, token, json) { send('${PANEL_PROMPT}', { pid: pid, json: json }); },
+                panelSend: function(pid, token, json) { if (!auth(pid, token)) return; send('${PANEL_PROMPT}', { pid: pid, token: token, json: json }); },
                 share: noop,
                 openExternal: noop,
                 clearData: noop,
@@ -144,6 +156,18 @@ object GeckoPluginHost {
               };
             })();
         """.trimIndent()
+    }
+
+    private fun isPromptAuthorized(
+        payload: String,
+        session: PluginSession?,
+        permission: PluginPermission? = null
+    ): Boolean {
+        val obj = try { JSONObject(payload) } catch (_: Exception) { return false }
+        val pid = obj.optString("pid")
+        val token = obj.optString("token")
+        return pid.isNotBlank() && token.isNotBlank() &&
+            session?.bridge?.isAuthorized(pid, token, permission) == true
     }
 
     private fun applyConfig(store: PluginConfigStore, payload: String) {
