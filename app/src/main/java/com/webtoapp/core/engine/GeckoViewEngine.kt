@@ -2467,7 +2467,8 @@ class GeckoViewEngine(
             plugins = pluginPayloads,
             url = url,
             appLang = com.webtoapp.core.i18n.Strings.lang.code,
-            configSeedJson = com.webtoapp.core.plugin.GeckoPluginHost.configSeed(pluginConfig, pluginPayloads)
+            configSeedJson = com.webtoapp.core.plugin.GeckoPluginHost.configSeed(pluginConfig, pluginPayloads),
+            pluginTokens = pluginPayloads.associate { it.plugin.id to (pluginSession?.geckoTokenFor(it.plugin.id) ?: "") }
         )
         if (script.isBlank()) return
         pluginInjectedUrl = url
