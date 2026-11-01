@@ -72,4 +72,64 @@ class GeckoPluginHostTest {
         assertThat(page).contains("function GM_addStyle")
         assertThat(page).doesNotContain("__hcjBridge")
     }
+
+    @Test
+    fun `HCJ uses per plugin token and wires host actions through prompt`() {
+        val plugin = Plugin(
+            id = "test-plugin",
+            kind = PluginKind.HCJ,
+            name = "Test",
+            permissions = setOf(
+                PluginPermission.STORAGE,
+                PluginPermission.FETCH,
+                PluginPermission.NOTIFY,
+                PluginPermission.BADGE,
+                PluginPermission.SHARE,
+                PluginPermission.OPEN_EXTERNAL,
+                PluginPermission.CLEAR_DATA,
+                PluginPermission.EXIT_APP
+            )
+        )
+        val resolved = PluginSession.Resolved(plugin = plugin, mainJs = "hcj.notify('title','body')")
+        val page = GeckoPluginHost.pageScript(
+            plugins = listOf(resolved),
+            url = "https://example.com/",
+            appLang = "en",
+            configSeedJson = """{"test-plugin":{"saved":true}}""",
+            pluginTokens = mapOf("test-plugin" to "secret-token")
+        )
+
+        assertThat(page).contains("secret-token")
+        assertThat(page).contains("token: token, method: method")
+        assertThat(page).contains("__wta_hcj_action__")
+        assertThat(page).contains("pluginTokens")
+        assertThat(page).contains("token = 'secret-token'")
+        assertThat(page).contains("configGet: function(pid, token, k)")
+        assertThat(page).contains("this.action(pid, token, 'fetch'")
+        assertThat(page).contains("this.action(pid, token, 'notify'")
+        assertThat(page).doesNotContain("token = 'gecko'")
+    }
+
+    @Test
+    fun `config bridge refuses plugins without storage permission`() {
+        val plugin = Plugin(
+            id = "no-storage",
+            kind = PluginKind.HCJ,
+            name = "No storage"
+        )
+        val page = GeckoPluginHost.pageScript(
+            plugins = listOf(PluginSession.Resolved(plugin = plugin, mainJs = "hcj.config.all()")),
+            url = "https://example.com/",
+            appLang = "en",
+            configSeedJson = "{}",
+            pluginTokens = mapOf("no-storage" to "private-token")
+        )
+
+        assertThat(page).contains("Object.prototype.hasOwnProperty.call(seed, pid)")
+        assertThat(GeckoPluginHost.configSeed(
+            PluginConfigStore(org.mockito.Mockito.mock(android.content.Context::class.java)),
+            emptyList()
+        )).isEqualTo("{}")
+    }
+
 }
