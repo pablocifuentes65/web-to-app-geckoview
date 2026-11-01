@@ -248,15 +248,15 @@ object GeckoPluginHost {
         append('"')
         for (ch in value) {
             when (ch) {
-                '\\\\' -> append("\\\\\\\\")
-                '"' -> append("\\\\\"")
-                '\\b' -> append("\\\\b")
-                '\\u000C' -> append("\\\\f")
-                '\\n' -> append("\\\\n")
-                '\\r' -> append("\\\\r")
-                '\\t' -> append("\\\\t")
+                '\\' -> append("\\\\")
+                '"' -> append("\\\"")
+                '\b' -> append("\\b")
+                '\u000C' -> append("\\f")
+                '\n' -> append("\\n")
+                '\r' -> append("\\r")
+                '\t' -> append("\\t")
                 else -> if (ch.code < 0x20) {
-                    append("\\\\u")
+                    append("\\u")
                     append(ch.code.toString(16).padStart(4, '0'))
                 } else append(ch)
             }
