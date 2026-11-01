@@ -277,6 +277,9 @@ class PluginSession(
         return out.toString()
     }
 
+    /** Capability token used by GeckoView's prompt-based bridge. */
+    fun geckoTokenFor(pluginId: String): String = tokenFor(pluginId)
+
     private fun tokenFor(pluginId: String): String {
         // Re-issue deterministically per session/plugin: tokens were all issued
         // in setPlugins; find via a second issuance is wrong, so store map.
