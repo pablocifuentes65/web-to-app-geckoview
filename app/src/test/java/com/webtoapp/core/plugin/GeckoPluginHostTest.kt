@@ -12,6 +12,7 @@ class GeckoPluginHostTest {
             kind = PluginKind.HCJ,
             name = "Dark Mode",
             runAt = PluginRunAt.DOCUMENT_START,
+            permissions = listOf(PluginPermission.STORAGE),
         )
         val resolved = PluginSession.Resolved(
             plugin = plugin,
@@ -24,6 +25,7 @@ class GeckoPluginHostTest {
             url = "https://ittf.com/",
             appLang = "en",
             configSeedJson = """{"builtin-dark-mode":{"enabled":true}}""",
+            pluginTokens = mapOf("builtin-dark-mode" to "dark-token"),
         )
 
         assertThat(script).contains("__wta_hcj_cfg__")
@@ -102,8 +104,7 @@ class GeckoPluginHostTest {
         assertThat(page).contains("secret-token")
         assertThat(page).contains("token: token, method: method")
         assertThat(page).contains("__wta_hcj_action__")
-        assertThat(page).contains("pluginTokens")
-        assertThat(page).contains("token = 'secret-token'")
+        assertThat(page).contains("_mk('test-plugin','secret-token'")
         assertThat(page).contains("configGet: function(pid, token, k)")
         assertThat(page).contains("this.action(pid, token, 'fetch'")
         assertThat(page).contains("this.action(pid, token, 'notify'")
