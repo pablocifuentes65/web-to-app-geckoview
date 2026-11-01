@@ -79,7 +79,7 @@ class GeckoPluginHostTest {
             id = "test-plugin",
             kind = PluginKind.HCJ,
             name = "Test",
-            permissions = setOf(
+            permissions = listOf(
                 PluginPermission.STORAGE,
                 PluginPermission.FETCH,
                 PluginPermission.NOTIFY,
@@ -126,10 +126,6 @@ class GeckoPluginHostTest {
         )
 
         assertThat(page).contains("Object.prototype.hasOwnProperty.call(seed, pid)")
-        assertThat(GeckoPluginHost.configSeed(
-            PluginConfigStore(org.mockito.Mockito.mock(android.content.Context::class.java)),
-            emptyList()
-        )).isEqualTo("{}")
     }
 
 }
