@@ -12,6 +12,7 @@ object GeckoPluginHost {
     const val CONFIG_PROMPT = "__wta_hcj_cfg__"
     const val BADGE_PROMPT = "__wta_hcj_badge__"
     const val PANEL_PROMPT = "__wta_hcj_panel__"
+    const val ACTION_PROMPT = "__wta_hcj_action__"
 
     fun runnable(plugins: List<PluginSession.Resolved>): List<PluginSession.Resolved> =
         plugins.filter { it.plugin.kind == PluginKind.HCJ || it.plugin.kind == PluginKind.USERSCRIPT }
@@ -58,7 +59,7 @@ object GeckoPluginHost {
                 parts += PluginInjection.wrapPluginCode(
                     plugin = resolved.plugin,
                     code = resolved.mainJs,
-                    token = "gecko",
+                    token = pluginTokens[resolved.plugin.id].orEmpty(),
                     appLang = appLang
                 )
             }
@@ -102,6 +103,10 @@ object GeckoPluginHost {
                 session?.deliverPanelMessageToPanel(json)
                 return true
             }
+            ACTION_PROMPT -> {
+                dispatchAction(payload, session)
+                return true
+            }
             else -> return false
         }
     }
@@ -123,6 +128,7 @@ object GeckoPluginHost {
               function noop() {}
               return {
                 configGet: function(pid, token, k) {
+                  if (!auth(pid, token)) return null;
                   var bag = seed[pid];
                   if (!bag || !Object.prototype.hasOwnProperty.call(bag, k)) return null;
                   return JSON.stringify(bag[k]);
@@ -138,24 +144,62 @@ object GeckoPluginHost {
                   if (seed[pid]) delete seed[pid][k];
                   send('${CONFIG_PROMPT}', { pid: pid, token: token, k: k, v: null });
                 },
-                configAll: function(pid, token) { return JSON.stringify(seed[pid] || {}); },
-                fetch: function() {},
-                notify: noop,
+                configAll: function(pid, token) {
+                  return auth(pid, token) ? JSON.stringify(seed[pid] || {}) : '{}';
+                },
+                action: function(pid, token, method, args) {
+                  if (!auth(pid, token)) return;
+                  send('${ACTION_PROMPT}', { pid: pid, token: token, method: method, args: args || [] });
+                },
+                fetch: function(pid, token, url, opts, cbId) {
+                  this.action(pid, token, 'fetch', [String(url), opts || '{}', cbId]);
+                },
+                notify: function(pid, token, title, body) {
+                  this.action(pid, token, 'notify', [String(title), String(body || '')]);
+                },
                 badge: function(pid, token, text, color) {
                   if (!auth(pid, token)) return;
                   send('${BADGE_PROMPT}', { pid: pid, token: token, text: text == null ? '' : String(text), color: color || '' });
                 },
-                panelOpen: noop,
-                panelClose: noop,
-                panelSend: function(pid, token, json) { if (!auth(pid, token)) return; send('${PANEL_PROMPT}', { pid: pid, token: token, json: json }); },
-                share: noop,
-                openExternal: noop,
-                clearData: noop,
-                exitApp: noop,
+                panelOpen: function(pid, token) { this.action(pid, token, 'panelOpen', []); },
+                panelClose: function(pid, token) { this.action(pid, token, 'panelClose', []); },
+                panelSend: function(pid, token, json) {
+                  if (!auth(pid, token)) return;
+                  send('${PANEL_PROMPT}', { pid: pid, token: token, json: json });
+                },
+                share: function(pid, token, title, text, url) {
+                  this.action(pid, token, 'share', [String(title || ''), String(text || ''), String(url || '')]);
+                },
+                openExternal: function(pid, token, url) {
+                  this.action(pid, token, 'openExternal', [String(url)]);
+                },
+                clearData: function(pid, token) { this.action(pid, token, 'clearData', []); },
+                exitApp: function(pid, token) { this.action(pid, token, 'exitApp', []); },
                 log: function(pid, token, m) { try { console.log('[hcj]', m); } catch (e) {} }
               };
             })();
         """.trimIndent()
+    }
+
+    private fun dispatchAction(payload: String, session: PluginSession?) {
+        val obj = try { JSONObject(payload) } catch (_: Exception) { return }
+        val pid = obj.optString("pid")
+        val token = obj.optString("token")
+        val method = obj.optString("method")
+        val args = obj.optJSONArray("args") ?: org.json.JSONArray()
+        val bridge = session?.bridge ?: return
+        if (pid.isBlank() || token.isBlank() || !bridge.isAuthorized(pid, token)) return
+        fun arg(index: Int): String = args.optString(index, "")
+        when (method) {
+            "fetch" -> if (args.length() >= 3) bridge.fetch(pid, token, arg(0), arg(1), arg(2))
+            "notify" -> if (args.length() >= 2) bridge.notify(pid, token, arg(0), arg(1))
+            "panelOpen" -> bridge.panelOpen(pid, token)
+            "panelClose" -> bridge.panelClose(pid, token)
+            "share" -> if (args.length() >= 3) bridge.share(pid, token, arg(0), arg(1), arg(2))
+            "openExternal" -> if (args.length() >= 1) bridge.openExternal(pid, token, arg(0))
+            "clearData" -> bridge.clearData(pid, token)
+            "exitApp" -> bridge.exitApp(pid, token)
+        }
     }
 
     private fun isPromptAuthorized(
