@@ -141,12 +141,14 @@ jobs:
         run: |
           ./gradlew --no-daemon --no-configuration-cache --no-parallel \
             -Pkotlin.compiler.execution.strategy=in-process \
+            -PallowDebugSignedRelease=true \
             :shell:assembleDebug
 
       - name: Build Shell Release APK
         run: |
           ./gradlew --no-daemon --no-configuration-cache --no-parallel \
             -Pkotlin.compiler.execution.strategy=in-process \
+            -PallowDebugSignedRelease=true \
             :shell:assembleRelease
 
       # End-to-end proof that the export pipeline produces an installable APK: a real
@@ -155,6 +157,7 @@ jobs:
         run: |
           ./gradlew --no-daemon --no-configuration-cache \
             -Pkotlin.compiler.execution.strategy=in-process \
+            -PallowDebugSignedRelease=true \
             :app:testStandardDebugUnitTest --tests "com.webtoapp.core.apkbuilder.DemoApkExportTest"
 
       - name: Upload generated demo APK
