@@ -54,7 +54,7 @@ jobs:
       - name: Run checks
         run: |
           ./gradlew --no-daemon --no-configuration-cache \
-            -Dkotlin.compiler.execution.strategy=in-process \
+            -Pkotlin.compiler.execution.strategy=in-process \
             -PskipShellTemplateSync=true \
             -PallowDebugSignedRelease=true \
             :app:compileStandardDebugKotlin \
@@ -65,7 +65,7 @@ jobs:
       - name: Compile F-Droid variant
         run: |
           ./gradlew --no-daemon --no-configuration-cache \
-            -Dkotlin.compiler.execution.strategy=in-process \
+            -Pkotlin.compiler.execution.strategy=in-process \
             -PskipShellTemplateSync=true \
             -Pfdroid=true \
             :app:compileStandardReleaseKotlin \
@@ -109,8 +109,8 @@ jobs:
 
       - name: Build APKs
         run: |
-          ./gradlew --no-daemon --no-configuration-cache \
-            -Dkotlin.compiler.execution.strategy=in-process \
+          ./gradlew --no-daemon --no-configuration-cache --no-parallel \
+            -Pkotlin.compiler.execution.strategy=in-process \
             -PallowDebugSignedRelease=true \
             :app:assembleStandardDebug \
             :app:assembleStandardRelease \
@@ -124,7 +124,7 @@ jobs:
       - name: Build generated demo APK
         run: |
           ./gradlew --no-daemon --no-configuration-cache \
-            -Dkotlin.compiler.execution.strategy=in-process \
+            -Pkotlin.compiler.execution.strategy=in-process \
             :app:testStandardDebugUnitTest --tests "com.webtoapp.core.apkbuilder.DemoApkExportTest"
 
       - name: Upload generated demo APK
