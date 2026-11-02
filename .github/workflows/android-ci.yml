@@ -76,7 +76,7 @@ jobs:
   package-apks:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 180
 
     steps:
       - name: Download code
@@ -107,16 +107,46 @@ jobs:
             "cmake;3.22.1" \
             "ndk;28.2.13676358"
 
-      - name: Build APKs
+      # Run each variant in its own Gradle process. This releases the Kotlin
+      # compiler heap between variants instead of retaining it for one huge build.
+      - name: Build Standard Debug APK
         run: |
           ./gradlew --no-daemon --no-configuration-cache --no-parallel \
             -Pkotlin.compiler.execution.strategy=in-process \
             -PallowDebugSignedRelease=true \
-            :app:assembleStandardDebug \
-            :app:assembleStandardRelease \
-            :app:assembleGplayDebug \
-            :app:assembleGplayRelease \
-            :shell:assembleDebug \
+            :app:assembleStandardDebug
+
+      - name: Build Standard Release APK
+        run: |
+          ./gradlew --no-daemon --no-configuration-cache --no-parallel \
+            -Pkotlin.compiler.execution.strategy=in-process \
+            -PallowDebugSignedRelease=true \
+            :app:assembleStandardRelease
+
+      - name: Build Gplay Debug APK
+        run: |
+          ./gradlew --no-daemon --no-configuration-cache --no-parallel \
+            -Pkotlin.compiler.execution.strategy=in-process \
+            -PallowDebugSignedRelease=true \
+            :app:assembleGplayDebug
+
+      - name: Build Gplay Release APK
+        run: |
+          ./gradlew --no-daemon --no-configuration-cache --no-parallel \
+            -Pkotlin.compiler.execution.strategy=in-process \
+            -PallowDebugSignedRelease=true \
+            :app:assembleGplayRelease
+
+      - name: Build Shell Debug APK
+        run: |
+          ./gradlew --no-daemon --no-configuration-cache --no-parallel \
+            -Pkotlin.compiler.execution.strategy=in-process \
+            :shell:assembleDebug
+
+      - name: Build Shell Release APK
+        run: |
+          ./gradlew --no-daemon --no-configuration-cache --no-parallel \
+            -Pkotlin.compiler.execution.strategy=in-process \
             :shell:assembleRelease
 
       # End-to-end proof that the export pipeline produces an installable APK: a real
